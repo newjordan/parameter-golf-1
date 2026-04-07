@@ -40,6 +40,22 @@ Resolution applied:
 - `eval_val`: use `torch.enable_grad()` when TTT is active and compute CE via logits path.
 - `eval_val_sliding`: same grad-context fix; also force `batch_seqs=1` for TTT to avoid cross-window coupling.
 
+### TTT-01_ouro_ttt (FAIL, strike 3)
+
+Observed error under DDP during validation:
+
+- `AttributeError: 'DistributedDataParallel' object has no attribute 'forward_logits'`
+
+Root cause:
+
+- TTT eval path called `model.forward_logits(...)` directly while `model` is a DDP wrapper.
+
+Resolution applied:
+
+- unwrap model for logits path in both evaluators:
+  - `model_for_logits = model.module if hasattr(model, "module") else model`
+  - use `model_for_logits.forward_logits(...)` in TTT eval.
+
 ## Next run
 
 Run arm 1 again from this branch after pulling latest `refined-focus`:

@@ -307,7 +307,8 @@ def eval_val(
     val_token_count = torch.zeros((), device=device, dtype=torch.float64)
     val_byte_count = torch.zeros((), device=device, dtype=torch.float64)
     model.eval()
-    ttt_active = hasattr(model, 'ttt') and getattr(model, 'ttt') is not None
+    model_for_logits = model.module if hasattr(model, "module") else model
+    ttt_active = hasattr(model_for_logits, 'ttt') and getattr(model_for_logits, 'ttt') is not None
     if not ttt_active:
         for m in model.modules():
             if isinstance(m, TTTLayer) and m.ttt_dim > 0:
@@ -327,7 +328,7 @@ def eval_val(
             y = local[1:].reshape(-1, seq_len)
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=True):
                 if ttt_active:
-                    logits = model.forward_logits(x)
+                    logits = model_for_logits.forward_logits(x)
                     batch_loss = F.cross_entropy(
                         logits.reshape(-1, logits.size(-1)).float(),
                         y.reshape(-1),
@@ -1816,7 +1817,8 @@ def eval_val_sliding(
     token_count = torch.zeros((), device=device, dtype=torch.float64)
     byte_count = torch.zeros((), device=device, dtype=torch.float64)
     base_model.eval()
-    ttt_active = hasattr(base_model, 'ttt') and base_model.ttt is not None
+    model_for_logits = base_model.module if hasattr(base_model, "module") else base_model
+    ttt_active = hasattr(model_for_logits, 'ttt') and model_for_logits.ttt is not None
     if not ttt_active:
         # Check inside compiled wrapper too
         for m in base_model.modules():
@@ -1825,7 +1827,11 @@ def eval_val_sliding(
                 break
     if ttt_active:
         batch_seqs = 1  # avoid cross-window coupling through shared fast-weight adaptation
-    compiled_logits = maybe_torch_compile(base_model.forward_logits, args) if not ttt_active else base_model.forward_logits
+    compiled_logits = (
+        maybe_torch_compile(model_for_logits.forward_logits, args)
+        if not ttt_active
+        else model_for_logits.forward_logits
+    )
     # TTT performs an inner autograd.grad step even during eval, so gradients
     # must remain enabled for forward; non-TTT path can stay inference-only.
     grad_ctx = torch.enable_grad() if ttt_active else torch.inference_mode()

@@ -315,9 +315,10 @@ def eval_val(
                 ttt_active = True
                 break
 
-    # TTT performs an inner autograd.grad step even during eval, so gradients
-    # must remain enabled for forward; non-TTT path can stay inference-only.
-    grad_ctx = torch.enable_grad() if ttt_active else torch.inference_mode()
+    # TTT layer internally re-enables grads for its tiny inner-step update.
+    # Keep outer eval in no_grad to avoid building a full graph over the model.
+    # Non-TTT path can stay inference-only.
+    grad_ctx = torch.no_grad() if ttt_active else torch.inference_mode()
     with grad_ctx:
         for batch_seq_start in range(seq_start, seq_end, local_batch_seqs):
             batch_seq_end = min(batch_seq_start + local_batch_seqs, seq_end)
@@ -1832,9 +1833,10 @@ def eval_val_sliding(
         if not ttt_active
         else model_for_logits.forward_logits
     )
-    # TTT performs an inner autograd.grad step even during eval, so gradients
-    # must remain enabled for forward; non-TTT path can stay inference-only.
-    grad_ctx = torch.enable_grad() if ttt_active else torch.inference_mode()
+    # TTT layer internally re-enables grads for its tiny inner-step update.
+    # Keep outer eval in no_grad to avoid building a full graph over the model.
+    # Non-TTT path can stay inference-only.
+    grad_ctx = torch.no_grad() if ttt_active else torch.inference_mode()
     with grad_ctx:
         for bi in range(0, len(my_windows), batch_seqs):
             batch_ws = my_windows[bi:bi + batch_seqs]

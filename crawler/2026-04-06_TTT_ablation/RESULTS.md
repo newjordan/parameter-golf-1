@@ -56,6 +56,22 @@ Resolution applied:
   - `model_for_logits = model.module if hasattr(model, "module") else model`
   - use `model_for_logits.forward_logits(...)` in TTT eval.
 
+### TTT-01_ouro_ttt (FAIL, strike 4)
+
+Observed error during final sliding-window eval:
+
+- `torch.OutOfMemoryError` (~79GB allocated per rank) in eval forward.
+
+Root cause:
+
+- TTT eval wrapper used global `torch.enable_grad()` for the full model forward,
+  building and retaining a full autograd graph across sliding windows.
+
+Resolution applied:
+
+- switch TTT eval wrappers to `torch.no_grad()` while keeping the inner TTT
+  adaptation step under local `torch.enable_grad()` inside `TTTLayer.forward`.
+
 ## Next run
 
 Run arm 1 again from this branch after pulling latest `refined-focus`:
